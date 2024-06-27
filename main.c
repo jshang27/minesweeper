@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define min(a, b) (a < b ? a : b)
+
 void usage(FILE *file, const char *progname) {
 	fprintf(file, "USAGE: %s [cols rows] [mines]\n\tcols: positive integer up to 30 (default 30)\n\trows: positive integer up to 24 (default 24)\n\tmines: positive integer up to cols*rows (default 10, will need to specify if cols*rows < 10)\n", progname);
 }
@@ -76,6 +78,21 @@ Board *create_board(int cols, int rows, int mines) {
 	return board;
 }
 
+bool board_check_win(Board *board) {
+	for (int y = 0; y < board->rows; y++) {
+		for (int x = 0; x < board->cols; x++) {
+			Tile *tile = board_get(board, x, y);
+			if (tile->mine) {
+				continue;
+			}
+			if (!tile->revealed) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 void add_number(char num) {
 	if (num == 0) {
 		addch(' ');
@@ -125,9 +142,9 @@ void add_flag(void) {
 	attroff(COLOR_PAIR(9));
 }	
 
-void add_board(Board *board) {
-	for (int y = 0; y < board->rows; y++) {
-		for (int x = 0; x < board->cols; x++) {
+void add_board(Board *board, int cam_x, int cam_y) {
+	for (int y = cam_y; y < min(cam_y + LINES - 1, board->rows); y++) {
+		for (int x = cam_x; x < min(cam_x + COLS, board->cols); x++) {
 			Tile *tile = board_get(board, x, y);
 			if (tile->flagged) {
 				add_flag();
@@ -139,6 +156,33 @@ void add_board(Board *board) {
 		}
 		addstr("\n");
 	}
+}
+
+void add_info(Board *board, int curs_x, int curs_y) {
+	char buf[6];
+	int length = snprintf(buf, 6, "%d,%d", curs_x, curs_y);
+	addstr(buf);
+	length += snprintf(buf, 6, "%d", board->mines_remaining);
+	for (int i = 0; i < min(board->cols, COLS) - length; i++) {
+		addch(' ');
+	}
+	addstr(buf);
+}
+
+void lose() {
+	erase();
+	curs_set(0);
+	addstr("You hit a mine!\n\nPress any key to exit");
+	refresh();	
+	getch();
+}
+
+void win() {
+	erase();
+	curs_set(0);
+	addstr("You won!\n\nPress any key to exit");
+	refresh();
+	getch();
 }
 
 int main(int argc, char **argv) {
@@ -214,13 +258,21 @@ int main(int argc, char **argv) {
 
 	int curs_x = 0;
 	int curs_y = 0;
+	int cam_x = 0;
+	int cam_y = 0;
 
 	while (true) {
+		if (board_check_win(board)) {
+			win();
+			break;
+		}		
+
 		erase();
-		add_board(board);
+		add_board(board, cam_x, cam_y);
+		add_info(board, curs_x, curs_y);
 		refresh();
 
-		move(curs_y, curs_x);
+		move(curs_y - cam_y, curs_x - cam_x);
 
 		switch (getch()) {
 		case 'q':; __attribute__((fallthrough));
@@ -232,6 +284,9 @@ int main(int argc, char **argv) {
 		case 'w': {
 			if (curs_y > 0) {
 				curs_y--;
+				if (curs_y < cam_y) {
+					cam_y--;
+				}
 			}
 		} break;
 		case KEY_DOWN:; __attribute__((fallthrough));
@@ -239,6 +294,9 @@ int main(int argc, char **argv) {
 		case 's': {
 			if (curs_y < board->rows - 1) {
 				curs_y++;
+				if (curs_y > LINES + cam_y - 2) {
+					cam_y++;
+				}
 			}
 		} break;
 		case KEY_LEFT:; __attribute__((fallthrough));
@@ -246,6 +304,9 @@ int main(int argc, char **argv) {
 		case 'a': {
 			if (curs_x > 0) {
 				curs_x--;
+				if (curs_x < cam_x) {
+					cam_x--;
+				}
 			}
 		} break;
 		case KEY_RIGHT:; __attribute__((fallthrough));
@@ -253,6 +314,9 @@ int main(int argc, char **argv) {
 		case 'd': {
 			if (curs_x < board->cols - 1) {
 				curs_x++;
+				if (curs_x > COLS + cam_x - 2) {
+					cam_x++;
+				}
 			}
 		} break;
 		case ' ':; __attribute__((fallthrough));
@@ -268,7 +332,8 @@ int main(int argc, char **argv) {
 		case 'e':; __attribute__((fallthrough));
 		case 'i': {
 			if (!reveal_tile(board, curs_x, curs_y)) {
-				// lose sequence	
+				lose();
+				goto end;	
 			}
 		}
 		}
