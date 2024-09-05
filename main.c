@@ -169,7 +169,7 @@ void add_info(Board *board, int curs_x, int curs_y) {
 	addstr(buf);
 }
 
-void lose() {
+void lose(void) {
 	erase();
 	curs_set(0);
 	addstr("You hit a mine!\n\nPress any key to exit");
@@ -177,8 +177,7 @@ void lose() {
 	getch();
 }
 
-void win() {
-	erase();
+void win(void) { erase();
 	curs_set(0);
 	addstr("You won!\n\nPress any key to exit");
 	refresh();
